@@ -43,17 +43,22 @@ def find_templates(inpath, outpath):
             outfile = os.path.join(outpath, os.path.basename(inpath))
             yield (inpath, outfile)
     else:
-        raise NotImplementedError
+        for root, dirs, files in os.walk(inpath):
+            for filename in files:
+                template_path = os.path.join(root, filename)
+                output_path = os.path.join(outpath, root[len(inpath):].strip("/"), filename)
+                yield template_path, output_path
 
 
 def main():
 
     # Define command line arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument("csvfile", help="CSV file with network entities")
+    parser.add_argument("csvfile", help="CSV file containing hosts")
     parser.add_argument("templates", help="template file or directory")
     parser.add_argument("output", help="output file or directory")
-    parser.add_argument("-v", "--var", help="yaml file with variables")
+    parser.add_argument("-v", "--var", metavar="VARFILE",
+                        help="yaml file with variables")
 
     # Parse arguments
     args = parser.parse_args()
@@ -91,12 +96,6 @@ def main():
             sys.exit(5)
     else:
         var = {}
-
-    # Check that input and output pathes exist
-    for path in (args.templates, args.output):
-        if not os.path.exists(args.templates):
-            logging.fatal("path does not exist: {}".format(path))
-            sys.exit(6)
 
     # Iterate over each input/output path pair
     for infile, outfile in find_templates(args.templates, args.output):
