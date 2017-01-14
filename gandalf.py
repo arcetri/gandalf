@@ -28,7 +28,7 @@ class ViewSet:
         '''
             Render list of hosts into /etc/hosts format.
             For that first group host entries by ip address
-            and return string representation of every group.
+            and then return string representation of every group.
             Parameters:
                 hosts - list of host entities
             Return value:
@@ -79,7 +79,8 @@ def parse_csv(csvpath):
         "domain": lambda s: bool(s),
         "vlan": lambda s: s.strip() == "" or 0 < int(s) < 4096,
         "ip": lambda s: s.count(".") == 3 and all(0 <= int(x) <= 255 and (x == "0" or x[0] != "0") for x in s.split(".")),
-        "mac": lambda s: s.count(":") == 5 and all(0 <= int(x,16) <= 255 and len(x) == 2 for x in s.split(":"))
+        "mac": lambda s: s.count(":") == 5 and all(0 <= int(x,16) <= 255 and len(x) == 2 for x in s.split(":")),
+        "entity_type": lambda s: s in ("comp", "head", "alias", "cimc", "hardware")
     }
 
     # Define column transformer functions.
@@ -190,7 +191,7 @@ def main():
     try:
         hosts = parse_csv(args.csvfile)
     except IOError as exc:
-        logging.fatal("unable to open {}: {}".format(args.csvfile, exc.strerror))
+        logging.fatal("unable to open '{}': {}".format(args.csvfile, exc.strerror))
         sys.exit(1)
     except csv.Error:
         logging.fatal("unable to parse csv file")
@@ -209,7 +210,7 @@ def main():
             with open(args.var, "r") as f:
                 var = yaml.read(f)
         except IOError as exc:
-            logging.fatal("unable to open {}: {}".format(args.var, exc.strerror))
+            logging.fatal("unable to open '{}': {}".format(args.var, exc.strerror))
             sys.exit(4)
         except yaml.error.YAMLError as exc:
             logging.fatal("yaml error: {}".format(exc))
@@ -224,10 +225,10 @@ def main():
         try:
             template = mako.template.Template(filename=infile)
         except IOError as exc:
-            logging.error("unable to open {}: {}".format(infile, exc.strerror))
+            logging.error("unable to open '{}': {}".format(infile, exc.strerror))
             continue
         except mako.exceptions.MakoException as exc:
-            logging.error("template error while reading {}: {}".format(infile, exc))
+            logging.error("template error while reading '{}': {}".format(infile, exc))
             continue
 
         # Render template
@@ -236,7 +237,7 @@ def main():
                                              host=tinydb.Query(), view=ViewSet)
         except Exception:
             tb = mako.exceptions.text_error_template().render().strip()
-            logging.error("unhandled exception while rendering template {}:\n{}"
+            logging.error("unhandled exception while rendering template '{}':\n{}"
                           .format(infile, tb))
             continue
 
@@ -246,7 +247,7 @@ def main():
             try:
                 os.makedirs(dirname, exist_ok=True)
             except OSError as exc:
-                logging.error("could not create directory {}: {}".format(dirname, exc.strerror))
+                logging.error("could not create directory '{}': {}".format(dirname, exc.strerror))
                 continue
 
         # Write rendered template
@@ -254,7 +255,7 @@ def main():
             with open(outfile, "w", encoding="utf8") as f:
                 f.write(output)
         except IOError as exc:
-            logging.error("could not write to file {}: {}".format(outfile, exc.strerror))
+            logging.error("could not write to file '{}': {}".format(outfile, exc.strerror))
             continue
 
 
