@@ -3,12 +3,13 @@
 import os
 import sys
 import csv
-import argparse
 import logging
+import argparse
+import itertools
 
 import yaml
-import mako, mako.exceptions, mako.template
 import tinydb
+import mako, mako.exceptions, mako.template
 
 
 # Exception raised by parse_csv if input csv file
@@ -17,7 +18,34 @@ class CsvIntegrityError(Exception): pass
 
 
 class ViewSet:
-    pass
+    '''
+        A class that contains static functions to render a list of hosts
+        into some string representation.
+    '''
+
+    @staticmethod
+    def hosts(hosts):
+        '''
+            Render list of hosts into /etc/hosts format.
+            For that first group host entries by ip address
+            and return string representation of every group.
+            Parameters:
+                hosts - list of host entities
+            Return value:
+                string suitable for use in /etc/hosts
+        '''
+        # Sort hosts by ip address
+        hosts = sorted(hosts, key=lambda h: [int(x) for x in h["ip"].split(".")])
+
+        # Render each group into hosts file entry
+        lines = [] # list of strings
+        for ip, host_group in itertools.groupby(hosts, key=lambda h: h["ip"]):
+            all_names = [name for host in host_group for name in
+                [host["hostname"], "{}.{}".format(host["hostname"], host["domain"])]]
+            lines.append("{} {}".format(ip, " ".join(all_names)))
+
+        # Render it all into one string
+        return "\n".join(lines)
 
 
 def parse_csv(csvpath):
@@ -50,8 +78,8 @@ def parse_csv(csvpath):
         "hostname": lambda s: bool(s),
         "domain": lambda s: bool(s),
         "vlan": lambda s: s.strip() == "" or 0 < int(s) < 4096,
-        "ip": lambda s: s.count(".") == 3 and [0 <= int(x) <= 255 for x in s.split(".")],
-        "mac": lambda s: s.count(":") == 5 and [0 <= int(x,16) <= 255 for x in s.split(":")]
+        "ip": lambda s: s.count(".") == 3 and all(0 <= int(x) <= 255 and (x == "0" or x[0] != "0") for x in s.split(".")),
+        "mac": lambda s: s.count(":") == 5 and all(0 <= int(x,16) <= 255 and len(x) == 2 for x in s.split(":"))
     }
 
     # Define column transformer functions.
@@ -223,7 +251,7 @@ def main():
 
         # Write rendered template
         try:
-            with open(outfile, "w") as f:
+            with open(outfile, "w", encoding="utf8") as f:
                 f.write(output)
         except IOError as exc:
             logging.error("could not write to file {}: {}".format(outfile, exc.strerror))
