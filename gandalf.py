@@ -2,6 +2,7 @@
 
 import os
 import sys
+import csv
 import argparse
 import logging
 
@@ -11,7 +12,7 @@ import tinydb
 
 
 # Exception raised by parse_csv if input csv file
-# has some logical errors (invalid ip/mac addresses etc)
+# has some logical errors (missing columns, invalid ip/mac addresses etc)
 class CsvIntegrityError(Exception): pass
 
 
@@ -20,7 +21,98 @@ class ViewSet:
 
 
 def parse_csv(csvpath):
-    return []
+    '''
+        Parse given CSV file and return a list of dicts,
+        where each dict represents a host on the network.
+        Make all columns names lowercase and replace spaces with underscores.
+        Check that the following columns exist: 'hostname', 'domain',
+        'ip', 'mac', 'vlan'. Check IP/MAC addresses for validity.
+        If column 'gendalf_ignore' is present, then any row
+        that has non-blank value in this column is getting ignored.
+        Parameters:
+            csvpath - path to CSV file
+        Return value:
+            list of dicts, where each dict corresponds to CSV file row
+        Raises:
+            IOError if unable to open given file
+            csv.Error if CSV file is invalid
+            CsvIntegrityError if there are missing columns or invalid values
+    '''
+
+    # Define a function that transforms column names.
+    # Make column name lowercase and replace spaces with underscores.
+    colname_transform = lambda colname: colname.lower().replace(" ", "_").strip()
+
+    # Define validator functions for every column.
+    # Value considered invalid if validator returns False
+    # or raises ValueError.
+    column_validators = {
+        "hostname": lambda s: bool(s),
+        "domain": lambda s: bool(s),
+        "vlan": lambda s: s.strip() == "" or 0 < int(s) < 4096,
+        "ip": lambda s: s.count(".") == 3 and [0 <= int(x) <= 255 for x in s.split(".")],
+        "mac": lambda s: s.count(":") == 5 and [0 <= int(x,16) <= 255 for x in s.split(":")]
+    }
+
+    # Define column transformer functions.
+    # Those functions are applied to corresponding columns
+    # after value has been validated with functions above.
+    # Note that by default all the values are stripped even before validating.
+    column_transformers = {
+        "vlan": lambda s: int(s) if s.strip() != "" else None,
+    }
+
+    # Go ahead and read csv file. This raises IOError and csv.Error
+    with open(csvpath, "r") as f:
+        raw_rows = tuple(csv.DictReader(f))
+
+    # If file is empty - quit
+    if not raw_rows:
+        return []
+
+    # Build the mapping of column names
+    colname_map = {colname: colname_transform(colname) for colname in raw_rows[0].keys()}
+    ignore_column = ([old_col for old_col, new_col in colname_map.items()
+            if new_col == "gandalf_ignore"] + [None])[0] # column that says to ignore row
+
+    # List of preprocessed rows
+    rows = []
+
+    # Do sanity checks and transforms
+    for n, raw_row in enumerate(raw_rows, start=2):
+
+        # If transformed columns contain non-blank 'gandalf_ignore' value,
+        # then skip this row
+        if raw_row.get(ignore_column, "").strip() != "":
+            continue
+
+        # Row after processing
+        row = {}
+
+        # For every column and value in row
+        for colname, value in raw_row.items():
+
+            # Transfrom column name and strip column value
+            new_colname = colname_map[colname]
+            value = value.strip()
+
+            # Check is value is valid
+            try:
+                is_valid = column_validators.get(new_colname, lambda x: True)(value)
+            except ValueError:
+                is_valid = False
+            if not is_valid:
+                raise CsvIntegrityError("invalid value: {} (row {}, column '{}')"
+                                        .format(repr(value), n, colname))
+
+            # Update column name and value
+            row[new_colname] = column_transformers.get(new_colname, lambda x: x)(value)
+
+        # Append this row to the resulting list of rows
+        rows.append(row)
+
+    # Yay, seems ok
+    return rows
 
 
 def find_templates(inpath, outpath):
@@ -120,7 +212,7 @@ def main():
                           .format(infile, tb))
             continue
 
-        # Make parent directories if does not exist
+        # Make parent directories if they do not exist
         dirname = os.path.dirname(outfile)
         if dirname:
             try:

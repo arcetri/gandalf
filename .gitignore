@@ -1,5 +1,7 @@
-# CSV files with test configuration
+# Files with test configuration
 *.csv
+templates/*
+rendered/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
