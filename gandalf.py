@@ -23,6 +23,20 @@ class ViewSet:
         into some string representation.
     '''
 
+    def setDefaultView(self, callable_):
+        '''
+            Set default callable to be called when __call__ is invoked.
+            Parameters:
+                callable_ - any callable object (meant to be ViewSet method,
+                           but it is not strictly neccesary).
+        '''
+        self._default_view = callable_
+
+    def __call__(self, *args, **kw):
+        if hasattr(self, "_default_view"):
+            return self._default_view(*args, **kw)
+        raise ValueError("default view is not set, use setDefaultView()")
+
     @staticmethod
     def hosts(hosts):
         '''
@@ -234,7 +248,7 @@ def main():
         # Render template
         try:
             output = template.render_unicode(var=var, db=db,
-                                             host=tinydb.Query(), view=ViewSet)
+                                             host=tinydb.Query(), view=ViewSet())
         except Exception:
             tb = mako.exceptions.text_error_template().render().strip()
             logging.error("unhandled exception while rendering template '{}':\n{}"
