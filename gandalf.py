@@ -28,7 +28,7 @@ class ViewSet:
             Set default callable to be called when __call__ is invoked.
             Parameters:
                 callable_ - any callable object (meant to be ViewSet method,
-                           but it is not strictly neccesary).
+                            but it is not strictly neccesary).
         '''
         self._default_view = callable_
 
@@ -93,8 +93,8 @@ def parse_csv(csvpath):
         "domain": lambda s: bool(s),
         "vlan": lambda s: s.strip() == "" or 0 < int(s) < 4096,
         "ip": lambda s: s.count(".") == 3 and all(0 <= int(x) <= 255 and (x == "0" or x[0] != "0") for x in s.split(".")),
-        "mac": lambda s: s.count(":") == 5 and all(0 <= int(x,16) <= 255 and len(x) == 2 for x in s.split(":")),
-        "entity_type": lambda s: s in ("comp", "head", "alias", "cimc", "hardware")
+        "mac": lambda s: not s or s.count(":") == 5 and all(0 <= int(x,16) <= 255 and len(x) == 2 for x in s.split(":")),
+        "entity_type": lambda s: s in ("comp", "head", "alias", "cimc", "fi", "hardware")
     }
 
     # Define column transformer functions.
