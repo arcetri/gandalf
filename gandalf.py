@@ -253,6 +253,10 @@ def main():
     # Iterate over each input/output path pair
     for infile, outfile in find_templates(args.templates, args.output):
 
+        # Strip '.mako' etension if present
+        if outfile.endswith(".mako"):
+            outfile = outfile[:-len(".mako")]
+
         # Create template
         try:
             template = mako.template.Template(filename=infile)
