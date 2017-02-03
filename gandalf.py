@@ -61,6 +61,24 @@ class ViewSet:
         # Render it all into one string
         return "\n".join(lines)
 
+    @staticmethod
+    def dns(hosts, type_="addr"):
+        '''
+            Render list of hosts into DNS zone file format.
+            Two types of rendering are supported: 'addr' for direct IP address
+            pointer and 'cname' for making a pointer to the entity that
+            this entity resides on.
+        '''
+        if type_ == "addr":
+            lines = ["{:<24}{:<8}{:<8}{}".format(h["hostname"], "IN", "A", h["ip"])
+                    for h in hosts]
+        elif type_ == "cname":
+            lines = ["{:<24}{:<8}{:<8}{}".format(h["hostname"], "IN", "CNAME",
+                    h["resides_on"]) for h in hosts]
+        else:
+            raise ValueError("Unknown DNS record type: {}".format(type_))
+        return "\n".join(sorted(lines))
+
 
 def parse_csv(csvpath):
     '''
