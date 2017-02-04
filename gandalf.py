@@ -46,7 +46,7 @@ class ViewSet:
             Parameters:
                 hosts - list of host entities
             Return value:
-                string suitable for use in /etc/hosts
+                multiline string suitable for use in /etc/hosts
         '''
         # Sort hosts by ip address
         hosts = sorted(hosts, key=lambda h: [int(x) for x in h["ip"].split(".")])
@@ -68,6 +68,11 @@ class ViewSet:
             Two types of rendering are supported: 'addr' for direct IP address
             pointer and 'cname' for making a pointer to the entity that
             this entity resides on.
+            Parameters:
+                hosts - list of host entities
+                type_ - either 'addr' or 'cname'
+            Return value:
+                multiline string suitable for use in DNS zone file
         '''
         if type_ == "addr":
             lines = ["{:<24}{:<8}{:<8}{}".format(h["hostname"], "IN", "A", h["ip"])
@@ -77,6 +82,36 @@ class ViewSet:
                     h["resides_on"]) for h in hosts]
         else:
             raise ValueError("Unknown DNS record type: {}".format(type_))
+        return "\n".join(sorted(lines))
+
+    @staticmethod
+    def rdns(hosts, mask=24):
+        '''
+            Render list of hosts into reverse DNS zone file format.
+            Parameters:
+                hosts - list of host entities
+                mask - network mask used to determine host part if it's IP address
+                       (integer from 0 to 32)
+            Return value:
+                multiline string suitable for use in reverse DNS zone file
+        '''
+        # Check that there are no two hosts with same IP address
+        hosts = sorted(hosts, key=lambda h: h["ip"])
+        for ip, host_group in itertools.groupby(hosts, key=lambda h: h["ip"]):
+            host_group = tuple(host_group)
+            if len(host_group) > 1:
+                raise ValueError("Multiple entities with same IP address found: '{}' ({})"
+                                 .format("', '".join(h["hostname"] for h in host_group), ip))
+
+        # Function to extract host part of a given IP address using network mask
+        get_host_part = lambda addr: sum(int(x)*256**i for i, x in enumerate(reversed(addr.split(".")))) & (2**(33-mask)-1)
+
+        # Form list of lines
+        lines = ["{:<24}{:<8}{:<8}{:<8}{}.{}.".format(
+                    get_host_part(h["ip"]), "1d", "IN", "PTR", h["hostname"], h["domain"])
+                for h in hosts]
+
+        # Sort and concatenate
         return "\n".join(sorted(lines))
 
 
@@ -157,7 +192,7 @@ def parse_csv(csvpath):
             new_colname = colname_map[colname]
             value = value.strip()
 
-            # Check is value is valid
+            # Check if value is valid
             try:
                 is_valid = column_validators.get(new_colname, lambda x: True)(value)
             except ValueError:
