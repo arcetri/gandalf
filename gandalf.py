@@ -33,6 +33,10 @@ class ViewSet:
         self._default_view = callable_
 
     def __call__(self, *args, **kw):
+        '''
+            Redirect call to the default view callable.
+            Intented to be used after setDefaultView method.
+        '''
         if hasattr(self, "_default_view"):
             return self._default_view(*args, **kw)
         raise ValueError("default view is not set, use setDefaultView()")
@@ -85,13 +89,11 @@ class ViewSet:
         return "\n".join(sorted(lines))
 
     @staticmethod
-    def rdns(hosts, mask=24):
+    def rdns(hosts):
         '''
             Render list of hosts into reverse DNS zone file format.
             Parameters:
                 hosts - list of host entities
-                mask - network mask used to determine host part if it's IP address
-                       (integer from 0 to 32)
             Return value:
                 multiline string suitable for use in reverse DNS zone file
         '''
@@ -103,15 +105,46 @@ class ViewSet:
                 raise ValueError("Multiple entities with same IP address found: '{}' ({})"
                                  .format("', '".join(h["hostname"] for h in host_group), ip))
 
-        # Function to extract host part of a given IP address using network mask
-        get_host_part = lambda addr: sum(int(x)*256**i for i, x in enumerate(reversed(addr.split(".")))) & (2**(33-mask)-1)
-
         # Form list of lines
         lines = ["{:<24}{:<8}{:<8}{:<8}{}.{}.".format(
-                    get_host_part(h["ip"]), "1d", "IN", "PTR", h["hostname"], h["domain"])
+                    h["ip"].split(".")[-1], "1d", "IN", "PTR", h["hostname"], h["domain"])
                 for h in hosts]
 
         # Sort and concatenate
+        return "\n".join(sorted(lines, key = lambda s: int(s.split()[0])))
+
+    @staticmethod
+    def dhcp(hosts, router_ip=None, filename=None):
+        '''
+            Render list of hosts into DHCP file format.
+            Parameters:
+                hosts - list of host entities
+                router_ip - ip address of default router (optional)
+                filename - EFI file for PXE boot (optional)
+            Return value:
+                multiline string suitable for use in DHCP file
+        '''
+        # Define a function that converts given ip address
+        # and network mask to broadcast address
+        def get_broadcast(ip, mask):
+            mask = int(mask)
+            ip_n = sum(int(x)*256**i for i, x in enumerate(reversed(ip.split("."))))
+            ip_n_bcast = ip_n & ((2**(mask+1)-1) << (32-mask)) | (2**(32-mask)-1)
+            return ".".join(str((ip_n_bcast & (0xFF << (8*i))) >> (8*i)) for i in reversed(range(4)))
+
+        # Build lines
+        lines = []
+        for host in hosts:
+            params = 'option host-name "{}"; hardware ethernet {}; fixed-address {}; ' \
+                'option broadcast-address {};'.format(host["hostname"]+"."+host["domain"],
+                    host["mac"], host["ip"], get_broadcast(host["ip"], host["mask"]))
+            if router_ip:
+                params += ' option routers {};'.format(router_ip)
+            if filename:
+                params += ' option filename "{}";'.format(filename)
+            lines.append("host {} {{ {} }}".format(host["hostname"], params))
+
+        # Sort and return
         return "\n".join(sorted(lines))
 
 
@@ -146,6 +179,7 @@ def parse_csv(csvpath):
         "domain": lambda s: bool(s),
         "vlan": lambda s: s.strip() == "" or 0 < int(s) < 4096,
         "ip": lambda s: s.count(".") == 3 and all(0 <= int(x) <= 255 and (x == "0" or x[0] != "0") for x in s.split(".")),
+        "mask": lambda s: 0 <= int(s) <= 32,
         "mac": lambda s: not s or s.count(":") == 5 and all(0 <= int(x,16) <= 255 and len(x) == 2 for x in s.split(":")),
         "entity_type": lambda s: s in ("comp", "head", "alias", "cimc", "fi", "hardware")
     }
