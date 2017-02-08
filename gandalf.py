@@ -114,11 +114,12 @@ class ViewSet:
         return "\n".join(sorted(lines, key = lambda s: int(s.split()[0])))
 
     @staticmethod
-    def dhcp(hosts, router_ip=None, filename=None):
+    def dhcp(hosts, with_hostname=True, router_ip=None, filename=None):
         '''
             Render list of hosts into DHCP file format.
             Parameters:
                 hosts - list of host entities
+                with_hostname - whether to include hostname option
                 router_ip - ip address of default router (optional)
                 filename - EFI file for PXE boot (optional)
             Return value:
@@ -135,9 +136,11 @@ class ViewSet:
         # Build lines
         lines = []
         for host in hosts:
-            params = 'option host-name "{}"; hardware ethernet {}; fixed-address {}; ' \
-                'option broadcast-address {};'.format(host["hostname"]+"."+host["domain"],
-                    host["mac"], host["ip"], get_broadcast(host["ip"], host["mask"]))
+            params = 'hardware ethernet {}; fixed-address {}; ' \
+                'option broadcast-address {};'.format(host["mac"], host["ip"],
+                        get_broadcast(host["ip"], host["mask"]))
+            if with_hostname:
+                params = 'option host-name "{}"; '.format(host["hostname"]+"."+host["domain"]) + params
             if router_ip:
                 params += ' option routers {};'.format(router_ip)
             if filename:
