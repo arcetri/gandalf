@@ -195,11 +195,15 @@ def parse_csv(csvpath):
         "vlan": lambda s: int(s) if s.strip() != "" else None,
     }
 
-    # Go ahead and read csv file. This raises IOError and csv.Error
+    # Go ahead and read csv file. This raises IOError on error
     with open(csvpath, "r") as f:
-        raw_rows = tuple(csv.DictReader(f))
+        lines = f.readlines()
+
+    # Strip comments (lines that start with '#')
+    lines = [l for l in lines if not l.lstrip().lstrip('"').startswith('#')]
 
     # If file is empty - quit
+    raw_rows = tuple(csv.DictReader(lines)) # raises csv.Error on error
     if not raw_rows:
         return []
 
