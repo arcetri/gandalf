@@ -5,12 +5,23 @@ import sys
 import csv
 import logging
 import argparse
+import datetime
 import itertools
 
 import yaml
 import tinydb
 import mako, mako.exceptions, mako.template
 
+# A string that is being added inside a template when get_dns_version()
+# function is called. After the initial rendering this anchor is replaced
+# with the appropriate DNS file version number.
+# Make sure that this string is really unique to all your templates,
+# otherwise you will have funny problems. This is a hack, you know. *sigh*
+DNS_HACK_ANCHOR = "#@!#$%^$!@!_DNS_VERSION_HACK_ANCHOR_#@!#$%^$!@!"
+
+# A string that is appended after DNS version number. Need to be unique
+# as well so that we could locate this string inside a rendered template.
+DNS_HACK_COMMENT = "  ; Version. Ignore the rest of this line (but don't edit). !@*%*@(%)%$@)&#^@!(fdsVDJS)}"
 
 # Exception raised by parse_csv if input csv file
 # has some logical errors (missing columns, invalid ip/mac addresses etc)
@@ -252,31 +263,106 @@ def parse_csv(csvpath):
     return rows
 
 
-def find_templates(inpath, outpath):
+def find_templates(inpath, outpath, dnspath):
     '''
         Recursively find all template files in a given inpath
-        and yield tuples of (template_path, output_path).
+        and yield tuples of (template_path, output_path, dns_path).
         Parameters:
             inpath - path to template file or directory with those files
-            outpath - base path of output files.
+            outpath - base path of output files
+            dnspath - base path of existing DNS files
         Returns:
             For each found template file yield a tuple of
-            (template_path, output_path), where the first value
+            (template_path, output_path, dns_path), where the first value
             is path to found template file, second value is
-            a path to the output file for this template.
+            a path to the output file for this template,
+            an third value is just the same file under dnspath
     '''
     if os.path.isfile(inpath):
         if not os.path.isdir(outpath):
-            yield (inpath, outpath)
+            yield (inpath, outpath, dnspath)
         else:
             outfile = os.path.join(outpath, os.path.basename(inpath))
-            yield (inpath, outfile)
+            dnsfile = os.path.join(dnspath, os.path.basename(inpath))
+            yield (inpath, outfile, dnsfile)
     else:
         for root, dirs, files in os.walk(inpath):
             for filename in files:
                 template_path = os.path.join(root, filename)
                 output_path = os.path.join(outpath, root[len(inpath):].strip("/"), filename)
-                yield template_path, output_path
+                dns_path = os.path.join(dnspath, root[len(inpath):].strip("/"), filename)
+                yield template_path, output_path, dns_path
+
+
+def apply_dns_version_hack(text, dnsfile):
+    '''
+        Replace DNS_HACK_ANCHOR with an appropriate DNS file version number.
+        Parameters:
+            text - string conraining rendered template
+            dnsfile - path to dns file that rendered template is compared against
+                (does not need to be existing file or even a valid DNS zone file)
+        Returns:
+            text where DNS_HACK_ANCHOR is replaced with DNS file version
+    '''
+    # Candidate for a current version if file if changed
+    version_candidate = int(datetime.datetime.strftime(datetime.datetime.now(), "%Y%m%d") + "00")
+
+    try:
+        with open(dnsfile, "r") as f:
+            old_text = f.read()
+    except (IOError, ValueError):
+        changed = True # consider that the file has changed
+        old_version = 0 # fake last version of a file
+    else:
+        old_version = parse_dns_version(old_text)
+        changed = dns_changed(text, old_text) or not old_version
+
+    if changed:
+        if version_candidate <= old_version:
+            version = old_version + 1
+        else:
+            version = version_candidate
+        return text.replace(DNS_HACK_ANCHOR, str(version))
+    else:
+        return text.replace(DNS_HACK_ANCHOR, str(old_version))
+
+
+def dns_changed(this_dns, other_dns):
+    '''
+        Return True if there is something different between the two DNS file texts.
+        Parameters:
+            this_dns, other_dns - DNS file contents to compare
+        Returns:
+            True or False
+    '''
+    # Define a function to preprocess DNS files
+    line_codephrase = DNS_HACK_COMMENT.split()[-1]
+    def signature(text):
+        lines = (" ".join(line.split(";")[0].strip().split())
+                for line in text.split('\n') if line_codephrase not in line)
+        return '\n'.join(line for line in lines if line)
+
+    # Compare signatures and return results
+    return signature(this_dns) != signature(other_dns)
+
+
+def parse_dns_version(text):
+    '''
+        Get dns version from DNS zone file text.
+        Parameters:
+            text - DNS file contents
+        Returns:
+            DNS zone number or 0 if not found
+    '''
+    line_codephrase = DNS_HACK_COMMENT.split()[-1]
+    try:
+        line = next(line for line in text.split('\n') if line_codephrase in line)
+    except StopIteration:
+        return 0
+    try:
+        return int(line.split(";")[0].split()[-1])
+    except (ValueError, IndexError):
+        return 0
 
 
 def main():
@@ -286,6 +372,8 @@ def main():
     parser.add_argument("csvfile", help="CSV file containing hosts")
     parser.add_argument("templates", help="template file or directory")
     parser.add_argument("output", help="output file or directory")
+    parser.add_argument("-d", "--dnsdir", metavar="DNSDIR", default="\000",
+                        help="directory with the old DNS files")
     parser.add_argument("-v", "--var", metavar="VARFILE",
                         help="yaml file with variables")
 
@@ -327,11 +415,14 @@ def main():
         var = {}
 
     # Iterate over each input/output path pair
-    for infile, outfile in find_templates(args.templates, args.output):
+    # There is also a hack with iterating over files in DNS directory in parallel
+    for infile, outfile, dnsfile in find_templates(args.templates, args.output, args.dnsdir):
 
-        # Strip '.mako' etension if present
+        # Strip '.mako' extension if present
         if outfile.endswith(".mako"):
             outfile = outfile[:-len(".mako")]
+        if dnsfile.endswith(".mako"):
+            dnsfile = dnsfile[:-len(".mako")]
 
         # Create template
         try:
@@ -345,13 +436,18 @@ def main():
 
         # Render template
         try:
-            output = template.render_unicode(var=var, db=db,
-                                             host=tinydb.Query(), view=ViewSet())
+            output = template.render_unicode(var=var, db=db, host=tinydb.Query(),
+                                             view=ViewSet(),
+                                             get_dns_version=lambda: DNS_HACK_ANCHOR + DNS_HACK_COMMENT)
         except Exception:
             tb = mako.exceptions.text_error_template().render().strip()
             logging.error("unhandled exception while rendering template '{}':\n{}"
                           .format(infile, tb))
             continue
+
+        # Apply DNS version hack if needed
+        if DNS_HACK_ANCHOR in output:
+            output = apply_dns_version_hack(output, dnsfile)
 
         # Make parent directories if they do not exist
         dirname = os.path.dirname(outfile)
