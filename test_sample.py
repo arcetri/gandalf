@@ -120,13 +120,13 @@ class TestViewSet(unittest.TestCase):
         '''
         # Sample list of hosts
         hosts = [
-            {"hostname": "foo", "ip": "10.12.13.14", "mask": "8",
+            {"hostname": "foo", "ip": "10.12.13.14", "mask": 8,
                 "domain": "bar.com", "mac": "00:00:00:00:00:00"},
-            {"hostname": "mew", "ip": "10.12.13.1", "mask": "8",
+            {"hostname": "mew", "ip": "10.12.13.1", "mask": 8,
                 "domain": "bar.com", "mac": "10:00:00:00:00:00"},
-            {"hostname": "solnishko-lu4istoe", "ip": "130.12.13.14", "mask": "16",
+            {"hostname": "solnishko-lu4istoe", "ip": "130.12.13.14", "mask": 16,
                 "domain": "bum.com", "mac": "20:00:00:00:00:00"},
-            {"hostname": "innopolis", "ip": "192.168.42.16", "mask": "24",
+            {"hostname": "innopolis", "ip": "192.168.42.16", "mask": 24,
                 "domain": "go.com", "mac": "30:00:00:00:00:00"}
         ]
 
@@ -172,11 +172,101 @@ class TestTopLevelFunctions(unittest.TestCase):
         A set of tests for top level functions.
     '''
 
-    def test_parse_csv(self):
+    @mock.patch('gandalf.open')
+    @mock.patch('gandalf.csv.DictReader')
+    def test_parse_csv(self, DictReader_mock, open_mock):
         '''
             Test parse_csv function.
         '''
-        pass
+        # Shortcut for readlines mock
+        readlines_mock = open_mock().__enter__().readlines
+        open_mock.reset_mock()
+
+        # Test that it tried to open the file
+        readlines_mock.return_value = ["foo,bar,mew"]
+        DictReader_mock.return_value = []
+        self.assertEqual(gandalf.parse_csv("foobar_file"), [])
+        self.assertTrue(readlines_mock.called)
+        open_mock.assert_called_once_with("foobar_file", "r")
+
+        # Test column name transform
+        DictReader_mock.return_value = [{"FOO": "1", "foo bar": "2", "  mew\t ": "3"}]
+        self.assertEqual(gandalf.parse_csv("foobar_file"),
+            [{"foo": "1", "foo_bar": "2", "mew": "3"}])
+
+        # Test column value validators and transformers
+        # hostname and domain:
+        for col in ("hostname", "domain"):
+            for invalid_value in ("", "   ", "\t", "   \t  \t    "):
+                DictReader_mock.return_value = [{col: invalid_value}]
+                self.assertRaises(gandalf.CsvIntegrityError, gandalf.parse_csv, "file")
+            DictReader_mock.return_value = [{col: " fooAV7v 0g3702$$%5   "}]
+            self.assertEqual(gandalf.parse_csv("file"), [{col: "fooAV7v 0g3702$$%5"}])
+
+        # vlan:
+        for invalid_value in ("0", "4096", "24353", "-1255"):
+            DictReader_mock.return_value = [{"vlan": invalid_value}]
+            self.assertRaises(gandalf.CsvIntegrityError, gandalf.parse_csv, "file")
+        DictReader_mock.return_value = [{"vlan": "500"}, {"vlan": ""}, {"vlan": "\t "}]
+        self.assertEqual(gandalf.parse_csv("file"), [{"vlan": 500},{"vlan": None},{"vlan": None}])
+
+        # ip:
+        for invalid_value in ("", " \t  ", "not_valid_ip", "192.156.0",
+                              "123.34.53.33.3", "145.256.95.311", "10.10.-5.4"):
+            DictReader_mock.return_value = [{"ip": invalid_value}]
+            self.assertRaises(gandalf.CsvIntegrityError, gandalf.parse_csv, "file")
+        DictReader_mock.return_value = [{"ip": "10.10.0.3"}, {"ip": "  192.168.3.4\t"}]
+        self.assertEqual(gandalf.parse_csv("file"), [{"ip": "10.10.0.3"},{"ip": "192.168.3.4"}])
+
+        # mask:
+        for invalid_value in ("", "     ", "-1", "33", "345"):
+            DictReader_mock.return_value = [{"mask": invalid_value}]
+            self.assertRaises(gandalf.CsvIntegrityError, gandalf.parse_csv, "file")
+        DictReader_mock.return_value = [{"mask": "8"}, {"mask": "  16 \t "}]
+        self.assertEqual(gandalf.parse_csv("file"), [{"mask": 8},{"mask": 16}])
+
+        # mac:
+        for invalid_value in ("not_mac", "ab:ab:ab:cx:df:eg"):
+            DictReader_mock.return_value = [{"mac": invalid_value}]
+            self.assertRaises(gandalf.CsvIntegrityError, gandalf.parse_csv, "file")
+        DictReader_mock.return_value = [{"mac": "10:10:10:10:10:10"}, {"mac": " ab:bc:cd:de:ef:f0\t "}]
+        self.assertEqual(gandalf.parse_csv("file"), [{"mac": "10:10:10:10:10:10"},{"mac": "ab:bc:cd:de:ef:f0"}])
+
+        # entity_type:
+        for invalid_value in ("", "  ", "\t", "foobar", "comp_", "15246"):
+            DictReader_mock.return_value = [{"entity_type": invalid_value}]
+            self.assertRaises(gandalf.CsvIntegrityError, gandalf.parse_csv, "file")
+        DictReader_mock.return_value = [{"entity_type": x} for x in
+                ["comp", "head ", "\thardware", "fi  ", "alias", "cimc"]]
+        self.assertEqual(gandalf.parse_csv("file"), [{"entity_type": x} for x in
+                ["comp", "head", "hardware", "fi", "alias", "cimc"]])
+
+        # Test gandalf_ignore column:
+        DictReader_mock.return_value = [
+            {"hostname": "foo0", "gandalf_ignore": ""},
+            {"hostname": "foo1", "gandalf_ignore": "  "},
+            {"hostname": "foo2", "gandalf_ignore": "  \t"},
+            {"hostname": "bar0", "gandalf_ignore": "0"},
+            {"hostname": "bar1", "gandalf_ignore": "-"},
+            {"hostname": "bar2", "gandalf_ignore": "no"},
+            {"hostname": "bar3", "gandalf_ignore": "yes"}
+        ]
+        self.assertEqual(gandalf.parse_csv("file"), [
+            {"hostname": "foo{}".format(i), "gandalf_ignore": ""} for i in range(3)
+        ])
+
+        # Test comments stripping
+        readlines_mock.return_value = [
+            "foo,bar,mew",
+            "# first easy comment",
+            "  # second one with some preceeding spaces",
+            "\"#quoted string comment, contains commas\"",
+            "  \t\"\t # quoted string, some spaces and tabs preceeding\"",
+            "1,2,3"
+        ]
+        DictReader_mock.reset_mock()
+        gandalf.parse_csv("file")
+        DictReader_mock.assert_called_once_with(["foo,bar,mew", "1,2,3"])
 
 
     def test_find_templates(self):

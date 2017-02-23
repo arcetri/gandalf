@@ -139,7 +139,6 @@ class ViewSet:
         # Define a function that converts given ip address
         # and network mask to broadcast address
         def get_broadcast(ip, mask):
-            mask = int(mask)
             ip_n = sum(int(x)*256**i for i, x in enumerate(reversed(ip.split("."))))
             ip_n_bcast = ip_n & ((2**(mask+1)-1) << (32-mask)) | (2**(32-mask)-1)
             return ".".join(str((ip_n_bcast & (0xFF << (8*i))) >> (8*i)) for i in reversed(range(4)))
@@ -183,7 +182,7 @@ def parse_csv(csvpath):
 
     # Define a function that transforms column names.
     # Make column name lowercase and replace spaces with underscores.
-    colname_transform = lambda colname: colname.lower().replace(" ", "_").strip()
+    colname_transform = lambda colname: colname.lower().strip().replace(" ", "_")
 
     # Define validator functions for every column.
     # Value considered invalid if validator returns False
@@ -204,6 +203,7 @@ def parse_csv(csvpath):
     # Note that by default all the values are stripped even before validating.
     column_transformers = {
         "vlan": lambda s: int(s) if s.strip() != "" else None,
+        "mask": int
     }
 
     # Go ahead and read csv file. This raises IOError on error
@@ -211,7 +211,7 @@ def parse_csv(csvpath):
         lines = f.readlines()
 
     # Strip comments (lines that start with '#')
-    lines = [l for l in lines if not l.lstrip().lstrip('"').startswith('#')]
+    lines = [l for l in lines if not l.lstrip().lstrip('"').lstrip().startswith('#')]
 
     # If file is empty - quit
     raw_rows = tuple(csv.DictReader(lines)) # raises csv.Error on error
