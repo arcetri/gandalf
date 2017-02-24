@@ -269,11 +269,59 @@ class TestTopLevelFunctions(unittest.TestCase):
         DictReader_mock.assert_called_once_with(["foo,bar,mew", "1,2,3"])
 
 
-    def test_find_templates(self):
+    @mock.patch('gandalf.os.path.isdir')
+    @mock.patch('gandalf.os.walk')
+    def test_find_templates(self, walk_mock, isdir_mock):
         '''
             Test find_templates function.
         '''
-        pass
+        # mock function for os.path.isdir:
+        # if file path ends with "dir", than it is directory
+        isdir_mock.side_effect = lambda s: s.endswith("dir") or s.endswith("/")
+
+        # Test case when inpath, outpath and dnspath are all files
+        self.assertEqual(list(gandalf.find_templates("infile", "outfile", "dnsfile")),
+            [("infile", "outfile", "dnsfile")])
+
+        # Inpath is a file, outpath and dnspath are directories
+        self.assertEqual(list(gandalf.find_templates("infile", "outdir", "dnsdir")),
+            [("infile", "outdir/infile", "dnsdir/infile")])
+
+        # Inpath and outpath are files, dnspath is a directory
+        self.assertEqual(list(gandalf.find_templates("infile", "outfile", "dnsdir")),
+            [("infile", "outfile", "dnsdir/infile")])
+
+        # Inpath and dnspath are files, outpath is a directory
+        self.assertEqual(list(gandalf.find_templates("infile", "outdir", "dnsfile")),
+            [("infile", "outdir/infile", "dnsfile")])
+
+        # Test that slash at the and of directory name doesn't break output
+        self.assertEqual(list(gandalf.find_templates("infile", "outdir/", "dnsdir/")),
+            [("infile", "outdir/infile", "dnsdir/infile")])
+
+        # Test when infile is a directory.
+        # Refer to os.walk documentation on the structure of os.walk call result.
+        walk_mock.return_value = [
+            ("templates_dir", ["foo_dir", "bar_dir"], ["zero_template"]),
+            ("templates_dir/foo_dir", [], ["first_template", "second_template"]),
+            ("templates_dir/bar_dir", ["mew_dir"], ["third_template"]),
+            ("templates_dir/bar_dir/mew_dir", [], ["fourth_template"])
+        ]
+        expected_output = [
+            ("templates_dir/zero_template", "output_dir/zero_template", "dns_dir/zero_template"),
+            ("templates_dir/foo_dir/first_template", "output_dir/foo_dir/first_template",
+                "dns_dir/foo_dir/first_template"),
+            ("templates_dir/foo_dir/second_template", "output_dir/foo_dir/second_template",
+                "dns_dir/foo_dir/second_template"),
+            ("templates_dir/bar_dir/third_template", "output_dir/bar_dir/third_template",
+                "dns_dir/bar_dir/third_template"),
+            ("templates_dir/bar_dir/mew_dir/fourth_template", "output_dir/bar_dir/mew_dir/fourth_template",
+                "dns_dir/bar_dir/mew_dir/fourth_template"),
+        ]
+        self.assertEqual(list(gandalf.find_templates("templates_dir", "output_dir", "dns_dir")),
+            expected_output)
+        self.assertEqual(list(gandalf.find_templates("templates_dir/", "output_dir", "dns_dir")),
+            expected_output)
 
 
     def test_apply_dns_version_hack(self):

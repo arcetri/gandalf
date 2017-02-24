@@ -278,13 +278,16 @@ def find_templates(inpath, outpath, dnspath):
             a path to the output file for this template,
             an third value is just the same file under dnspath
     '''
-    if os.path.isfile(inpath):
+    if not os.path.isdir(inpath):
         if not os.path.isdir(outpath):
-            yield (inpath, outpath, dnspath)
+            outfile = outpath
         else:
             outfile = os.path.join(outpath, os.path.basename(inpath))
+        if not os.path.isdir(dnspath):
+            dnsfile = dnspath
+        else:
             dnsfile = os.path.join(dnspath, os.path.basename(inpath))
-            yield (inpath, outfile, dnsfile)
+        yield (inpath, outfile, dnsfile)
     else:
         for root, dirs, files in os.walk(inpath):
             for filename in files:
