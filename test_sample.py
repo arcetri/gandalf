@@ -7,6 +7,7 @@
 import csv
 import unittest
 import argparse
+import datetime
 from unittest import mock
 
 import gandalf
@@ -324,32 +325,121 @@ class TestTopLevelFunctions(unittest.TestCase):
             expected_output)
 
 
-    def test_apply_dns_version_hack(self):
+    @mock.patch('gandalf.open')
+    @mock.patch('gandalf.dns_changed')
+    @mock.patch('gandalf.parse_dns_version')
+    @mock.patch('gandalf.datetime.datetime')
+    def test_apply_dns_version_hack(self, datetime_mock, dns_version_mock,
+                                    dns_changed_mock, open_mock):
         '''
             Test apply_dns_version_hack function.
         '''
-        pass
+        # Shortcut for read mock
+        read_mock = open_mock().__enter__().read
+        open_mock.reset_mock()
+
+        # Shortcut for datetime.datetime.now mock
+        now_mock = datetime_mock.now
+        gandalf.datetime.datetime.strftime.side_effect = \
+            lambda d, f: "{:04}{:02}{:02}".format(d["year"], d["month"], d["day"])
+
+        # Test case when old version of file is smaller and file not changed
+        read_mock.return_value = "other_dns_contents"
+        now_mock.return_value = {"year": 2017, "month": 1, "day": 1}
+        dns_version_mock.return_value = 2016123100
+        dns_changed_mock.return_value = False
+        dns_contents = "foobar\n" + gandalf.DNS_HACK_ANCHOR + "\nbarfoo"
+        self.assertEqual(gandalf.apply_dns_version_hack(dns_contents, "oldfile"),
+            "foobar\n2016123100\nbarfoo")
+        open_mock.assert_called_once_with("oldfile", "r")
+        now_mock.assert_called_once_with()
+        dns_version_mock.assert_called_once_with("other_dns_contents")
+        dns_changed_mock.assert_called_once_with(dns_contents, "other_dns_contents")
+
+        # Test case when old version of file is smaller and file changed
+        dns_changed_mock.return_value = True
+        self.assertEqual(gandalf.apply_dns_version_hack(dns_contents, "oldfile"),
+            "foobar\n2017010100\nbarfoo")
+
+        # Test case when old version of file is bigger and file changed
+        dns_version_mock.return_value = 2017010130
+        self.assertEqual(gandalf.apply_dns_version_hack(dns_contents, "oldfile"),
+            "foobar\n2017010131\nbarfoo")
+
+        # Test case when old version of file is bigger and file not changed
+        dns_changed_mock.return_value = False
+        self.assertEqual(gandalf.apply_dns_version_hack(dns_contents, "oldfile"),
+            "foobar\n2017010130\nbarfoo")
+
+        # Test case when open raises IOError
+        open_mock.side_effect = IOError()
+        self.assertEqual(gandalf.apply_dns_version_hack(dns_contents, "oldfile"),
+            "foobar\n2017010100\nbarfoo")
+
+        # Test case when open raises ValueError
+        open_mock.side_effect = ValueError()
+        self.assertEqual(gandalf.apply_dns_version_hack(dns_contents, "oldfile"),
+            "foobar\n2017010100\nbarfoo")
 
 
     def test_dns_changed(self):
         '''
             Test dns_changed function.
         '''
-        pass
+        # Test on identical strings
+        self.assertFalse(gandalf.dns_changed("my_dns_config", "my_dns_config"))
+
+        # Test on strings that have different spacing
+        self.assertFalse(gandalf.dns_changed("  my_dns_config ", "\tmy_dns_config    "))
+
+        # Test on strings that have different comments
+        self.assertFalse(gandalf.dns_changed("my_dns_config ; comment 1", "my_dns_config ; my comment 2"))
+
+        # Test on strings that have different line splitting
+        self.assertFalse(gandalf.dns_changed("my config \n continues", "my \n config continues"))
+
+        # Test on different content
+        self.assertTrue(gandalf.dns_changed("my_dns_config", "other_dns_config"))
 
 
     def test_parse_dns_version(self):
         '''
             Test parse_dns_version function.
         '''
-        pass
+        # Test on string with a single hack comment
+        self.assertEqual(gandalf.parse_dns_version("abc\nsomething 637237337" + gandalf.DNS_HACK_COMMENT),
+                         637237337)
+
+        # Test on string with lwo hack comments
+        self.assertEqual(gandalf.parse_dns_version(
+            "def\nsomething 637237337 {0}\nelse 56474575 {0}".format(gandalf.DNS_HACK_COMMENT)),
+                637237337)
+
+        # Test on string with no comment
+        self.assertEqual(gandalf.parse_dns_version("nothing to be parsed"), 0)
 
 
-    def test_main(self):
+    @mock.patch('gandalf.open')
+    @mock.patch('gandalf.logging')
+    @mock.patch('gandalf.sys.exit')
+    @mock.patch('gandalf.parse_csv')
+    @mock.patch('gandalf.yaml.load')
+    @mock.patch('gandalf.tinydb.TinyDB')
+    @mock.patch('gandalf.find_templates')
+    @mock.patch('gandalf.apply_dns_version_hack')
+    @mock.patch('gandalf.mako.template.Template')
+    @mock.patch('gandalf.argparse.ArgumentParser')
+    def test_main(self, ArgumentParser_mock, Template_mock, apply_dns_version_hack_mock,
+                  find_templates_mock, TinyDB_mock, yaml_load_mock, parse_csv_mock,
+                  exit_mock, logging_mock, open_mock):
         '''
             Test main function.
         '''
-        pass
+        # Shortcut for read mock
+        read_mock = open_mock().__enter__().read
+        open_mock.reset_mock()
+
+        gandalf.main()
 
 
 if __name__ == '__main__':

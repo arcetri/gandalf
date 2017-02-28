@@ -307,7 +307,7 @@ def apply_dns_version_hack(text, dnsfile):
         Returns:
             text where DNS_HACK_ANCHOR is replaced with DNS file version
     '''
-    # Candidate for a current version if file if changed
+    # Candidate for a current version of file if changed
     version_candidate = int(datetime.datetime.strftime(datetime.datetime.now(), "%Y%m%d") + "00")
 
     try:
@@ -343,7 +343,7 @@ def dns_changed(this_dns, other_dns):
     def signature(text):
         lines = (" ".join(line.split(";")[0].strip().split())
                 for line in text.split('\n') if line_codephrase not in line)
-        return '\n'.join(line for line in lines if line)
+        return " ".join(line for line in lines if line)
 
     # Compare signatures and return results
     return signature(this_dns) != signature(other_dns)
@@ -391,13 +391,13 @@ def main():
         hosts = parse_csv(args.csvfile)
     except IOError as exc:
         logging.fatal("unable to open '{}': {}".format(args.csvfile, exc.strerror))
-        sys.exit(1)
+        return sys.exit(1)
     except csv.Error:
         logging.fatal("unable to parse csv file")
-        sys.exit(2)
+        return sys.exit(2)
     except CsvIntegrityError as exc:
         logging.fatal("error in csv file: {}".format(exc))
-        sys.exit(3)
+        return sys.exit(3)
 
     # Create in-memory database from the list of network entities
     db = tinydb.TinyDB(storage=tinydb.storages.MemoryStorage)
@@ -407,13 +407,13 @@ def main():
     if args.var:
         try:
             with open(args.var, "r") as f:
-                var = yaml.read(f)
+                var = yaml.load(f)
         except IOError as exc:
             logging.fatal("unable to open '{}': {}".format(args.var, exc.strerror))
-            sys.exit(4)
+            return sys.exit(4)
         except yaml.error.YAMLError as exc:
             logging.fatal("yaml error: {}".format(exc))
-            sys.exit(5)
+            return sys.exit(5)
     else:
         var = {}
 
@@ -471,7 +471,7 @@ def main():
 
 
     # All done
-    sys.exit(0)
+    return sys.exit(0)
 
 
 if __name__ == "__main__":
