@@ -542,5 +542,18 @@ class TestTopLevelFunctions(unittest.TestCase):
         write_mock.side_effect = None
 
 
+    @mock.patch('gandalf.main')
+    def test_toplevel_code(self, main_mock):
+        '''
+            Test toplevel_code function.
+            For the sake of 100% unit test coverage only.
+        '''
+        old_name = gandalf.__name__
+        gandalf.__name__ = "__main__"
+        gandalf.toplevel_code()
+        main_mock.assert_called_once_with()
+        gandalf.__name__ = old_name
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -474,5 +474,9 @@ def main():
     return sys.exit(0)
 
 
-if __name__ == "__main__":
-    main()
+# Little trick to get 100% code coverage with unit tests (muhahaha)
+def toplevel_code():
+    if __name__ == "__main__":
+        main()
+
+toplevel_code()
