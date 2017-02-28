@@ -5,6 +5,8 @@
 '''
 
 import csv
+import yaml
+import mako
 import unittest
 import argparse
 import datetime
@@ -38,6 +40,10 @@ class TestViewSet(unittest.TestCase):
                                           # (that's why I prefer not to generate passwords myself)
         self.assertEqual(view(123, "cisco4ever", "MTUCI1LOVE"), 1995)
         callable_mock.assert_called_with(123, "cisco4ever", "MTUCI1LOVE")
+
+        # Test when default view is not set
+        view = gandalf.ViewSet()
+        self.assertRaises(ValueError, view)
 
 
     def test_hosts(self):
@@ -418,28 +424,122 @@ class TestTopLevelFunctions(unittest.TestCase):
         # Test on string with no comment
         self.assertEqual(gandalf.parse_dns_version("nothing to be parsed"), 0)
 
+        # Test when comment is present, but no version
+        self.assertEqual(gandalf.parse_dns_version(gandalf.DNS_HACK_COMMENT), 0)
+
+        # Test when comment is present, but preceeding string is not an int
+        self.assertEqual(gandalf.parse_dns_version("garbage" + gandalf.DNS_HACK_COMMENT), 0)
+
 
     @mock.patch('gandalf.open')
     @mock.patch('gandalf.logging')
     @mock.patch('gandalf.sys.exit')
     @mock.patch('gandalf.parse_csv')
     @mock.patch('gandalf.yaml.load')
+    @mock.patch('gandalf.os.makedirs')
     @mock.patch('gandalf.tinydb.TinyDB')
     @mock.patch('gandalf.find_templates')
     @mock.patch('gandalf.apply_dns_version_hack')
     @mock.patch('gandalf.mako.template.Template')
     @mock.patch('gandalf.argparse.ArgumentParser')
     def test_main(self, ArgumentParser_mock, Template_mock, apply_dns_version_hack_mock,
-                  find_templates_mock, TinyDB_mock, yaml_load_mock, parse_csv_mock,
-                  exit_mock, logging_mock, open_mock):
+                  find_templates_mock, TinyDB_mock, makedirs_mock, yaml_load_mock,
+                  parse_csv_mock, exit_mock, logging_mock, open_mock):
         '''
             Test main function.
         '''
-        # Shortcut for read mock
-        read_mock = open_mock().__enter__().read
-        open_mock.reset_mock()
+        # Shortcut for resetting all mocks
+        def reset_all_mocks():
+            for mock in [ArgumentParser_mock, Template_mock, apply_dns_version_hack_mock,
+                         find_templates_mock, TinyDB_mock, makedirs_mock, yaml_load_mock,
+                         parse_csv_mock, exit_mock, logging_mock, open_mock]:
+                mock.reset_mock()
 
+        # Shortcut for checking error exit
+        def assert_error_exit():
+            self.assertTrue(exit_mock.called)
+            self.assertTrue(exit_mock.call_args_list[-1][0][0] > 0)
+            self.assertTrue(logging_mock.fatal.called)
+
+        # Shortcut for command-line arguments mock
+        args_mock = ArgumentParser_mock().parse_args()
+        ArgumentParser_mock.reset_mock()
+
+        # Test run
         gandalf.main()
+        exit_mock.assert_called_once_with(0)
+        reset_all_mocks()
+
+        # parse_csv throws exception
+        args_mock.csvfile = "file.csv"
+        for Exc in [IOError, csv.Error, gandalf.CsvIntegrityError]:
+            parse_csv_mock.side_effect = Exc()
+            gandalf.main()
+            parse_csv_mock.assert_called_once_with("file.csv")
+            assert_error_exit()
+            reset_all_mocks()
+        parse_csv_mock.side_effect = None
+
+        # open() on args.var throws exception
+        args_mock.var = "varfile.yaml"
+        open_mock.side_effect = IOError()
+        gandalf.main()
+        open_mock.assert_called_once_with("varfile.yaml", "r")
+        assert_error_exit()
+        reset_all_mocks()
+        open_mock.side_effect = None
+
+        # yaml.load throws exception
+        yaml_load_mock.side_effect = yaml.error.YAMLError()
+        gandalf.main()
+        assert_error_exit()
+        reset_all_mocks()
+        yaml_load_mock.side_effect = None
+
+        # mako.template.Template throws exception
+        find_templates_mock.return_value = [("templates/infile.mako", "rendered/outfile.mako", "dns/dnsfile.mako")]
+        args_mock.var = None
+        for Exc in [IOError, mako.exceptions.MakoException]:
+            Template_mock.side_effect = Exc()
+            gandalf.main()
+            Template_mock.assert_called_once_with(filename="templates/infile.mako")
+            self.assertTrue(logging_mock.error.called)
+            reset_all_mocks()
+        Template_mock.side_effect = None
+
+        # Template rendering throws an exception
+        Template_mock().render_unicode.side_effect = Exception()
+        gandalf.main()
+        self.assertTrue(logging_mock.error.called)
+        reset_all_mocks()
+        Template_mock().render_unicode.side_effect = None
+
+        # Test that DNS version hack is applied
+        Template_mock().render_unicode.return_value = gandalf.DNS_HACK_ANCHOR
+        gandalf.main()
+        apply_dns_version_hack_mock.assert_called_once_with(gandalf.DNS_HACK_ANCHOR, "dns/dnsfile")
+        reset_all_mocks()
+
+        # Test that os.makedirs is called if neccesary
+        # and that OSError is handled
+        makedirs_mock.side_effect = OSError()
+        gandalf.main()
+        makedirs_mock.assert_called_once_with("rendered", exist_ok=True)
+        self.assertTrue(logging_mock.error.called)
+        reset_all_mocks()
+        makedirs_mock.side_effect = None
+
+        # Writing rendered file throws IOError
+        write_mock = open_mock().__enter__().write
+        open_mock.reset_mock()
+        write_mock.side_effect = IOError()
+        Template_mock().render_unicode.return_value = "rendered_template"
+        gandalf.main()
+        open_mock.assert_called_once_with("rendered/outfile", "w", encoding="utf8")
+        write_mock.assert_called_once_with("rendered_template")
+        exit_mock.assert_called_once_with(0)
+        reset_all_mocks()
+        write_mock.side_effect = None
 
 
 if __name__ == '__main__':
