@@ -283,7 +283,7 @@ def find_templates(inpath, outpath, dnspath):
             outfile = outpath
         else:
             outfile = os.path.join(outpath, os.path.basename(inpath))
-        if not os.path.isdir(dnspath):
+        if '\000' in dnspath or not os.path.isdir(dnspath):
             dnsfile = dnspath
         else:
             dnsfile = os.path.join(dnspath, os.path.basename(inpath))

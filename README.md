@@ -67,6 +67,11 @@ special rules for value validation (although none of them is required to be pres
 * _dev_ -- linux device name (e.g. _eno1_). No validation rules;
 * _mac_ -- interface MAC address. Should be a valid MAC address (case-insensitive);
 
+Note that CSV stands for "COMMA separated values". Therefore make sure that
+your spreadsheet editor (such as Microsoft Excel) actually uses _commas_ to
+delimit values rather than tabs or something else. If you get weird KeyError
+exceptions during template rendering, this is issue is the first candidate.
+
 
 ### 2.2. Template files
 

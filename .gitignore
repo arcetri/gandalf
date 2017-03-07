@@ -1,7 +1,7 @@
 # Files with test configuration
-*.csv
 templates/*
 rendered/*
+examples/rendered/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
