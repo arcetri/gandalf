@@ -21,7 +21,7 @@ DNS_HACK_ANCHOR = "#@!#$%^$!@!_DNS_VERSION_HACK_ANCHOR_#@!#$%^$!@!"
 
 # A string that is appended after DNS version number. Need to be unique
 # as well so that we could locate this string inside a rendered template.
-DNS_HACK_COMMENT = "  ; Version. Ignore the rest of this line (but don't edit). !@*%*@(%)%$@)&#^@!(fdsVDJS)}"
+DNS_HACK_COMMENT = "  ; Version. The following must be present on the version line: !@*%*@%$_Sergei_Innopolis_1love"
 
 # Exception raised by parse_csv if input csv file
 # has some logical errors (missing columns, invalid ip/mac addresses etc)
