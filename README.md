@@ -10,7 +10,16 @@ and TinyDB as an internal database that can be queried from templates.
 The set of unit tests provided covers 100% of application code.
 
 
-## 1. Usage
+## 1. Installation
+
+To install under global Python package path, use command
+
+`./setup.py install`
+
+This will install all necessary dependencies and create 'gandalf' shell command.
+
+
+## 2. Usage
 
 `./gandalf.py [-h] [-d DNSDIR] [-v VARFILE] csvfile templates output`
 
@@ -41,9 +50,9 @@ you will notice that if you haven't changed DNS files, then their version
 numbers are preserved.
 
 
-## 2. Input files
+## 3. Input files
 
-### 2.1. CSV file
+### 3.1. CSV file
 
 The CSV file (that is the first argument to Gandalf) could have any columns
 you would like it to have. However, some columns have special meaning and
@@ -73,7 +82,7 @@ delimit values rather than tabs or something else. If you get weird KeyError
 exceptions during template rendering, this is issue is the first candidate.
 
 
-### 2.2. Template files
+### 3.2. Template files
 
 The templating library used is Mako. You can read the full documentation of
 all the capabilities provided by Mako on the official website of the library:
@@ -81,7 +90,7 @@ http://www.makotemplates.org/. However, a very little part of Mako functionality
 is of most practical interest. Below is a quick summary.
 
 
-#### 2.2.1. Basic templating functionality
+#### 3.2.1. Basic templating functionality
 
 When rendering template, Mako executes pieces of Python code that are embedded
 into the templates and pastes into the document whatever those Python
@@ -130,7 +139,7 @@ actual template body after '##' symbols. However, '##' works only at the
 beginning of the line.
 
 
-#### 2.2.2. Special template variables
+#### 3.2.2. Special template variables
 
 There are some special variables defined in the template namespace that don't
 have to do anything directly with Mako, but rather are Gandalf-specific.
@@ -148,7 +157,7 @@ Below is the list of such variables.
    you may think of it this way).
 
 
-#### 2.2.3. TinyDB database
+#### 3.2.3. TinyDB database
 
 The _db_ variable in the template namespace is a reference to TinyDB database
 object. For a full API reference, see TinyDB website: https://tinydb.readthedocs.io
@@ -172,7 +181,7 @@ There is also a way to query based on arbitrary boolean function. For example:
 will return the list of all rows that have an odd value in "vlan" column.
 
 
-#### 2.2.4. View object
+#### 3.2.4. View object
 
 The _view_ variable contains an object that renders list of dictionaries
 returned by TinyDB queries into string representation. There are multiple
