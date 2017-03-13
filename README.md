@@ -93,7 +93,7 @@ is of most practical interest. Below is a quick summary.
 #### 3.2.1. Basic templating functionality
 
 When rendering template, Mako executes pieces of Python code that are embedded
-into the templates and pastes into the document whatever those Python
+into the template and pastes into the document whatever those Python
 snippets evaluated into. The special syntax that is used for inline python code
 is symbols ${ and }. For example, template file containing
 
@@ -146,15 +146,16 @@ have to do anything directly with Mako, but rather are Gandalf-specific.
 Below is the list of such variables.
 
 * _db_ -- TinyDB database instance that contains entities read from CSV file.
-  Refer to point 2.2.3 of this Readme for functionality description;
-* _host_ -- special symbol used to do queries on TinyDB (refer to point 2.2.3);
+  Refer to point 3.2.3 of this Readme for functionality description;
+* _host_ -- special symbol used to do queries on TinyDB (refer to point 3.2.3);
 * _var_ -- a structure that contains whatever was read from _varfile_ YAML file;
 * _view_ -- an object that contains functions for rendering CSV file objects
   into representations suitable for use in different config files. Reference
-  to point 2.2.4 for documentation;
+  to point 3.2.4 for documentation;
 * _get_dns_version_ -- a function that returns a proper DNS zone file version
   (well, not really, but unless you dive into Gandalf implementation details
-   you may think of it this way).
+   you may think of it this way). Should be called on separate line (see examples);
+* _FILE_NAME_ -- name of the current file being rendered.
 
 
 #### 3.2.3. TinyDB database

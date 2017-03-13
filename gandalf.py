@@ -440,8 +440,8 @@ def main():
         # Render template
         try:
             output = template.render_unicode(var=var, db=db, host=tinydb.Query(),
-                                             view=ViewSet(),
-                                             get_dns_version=lambda: DNS_HACK_ANCHOR + DNS_HACK_COMMENT)
+                    view=ViewSet(), FILE_NAME=os.path.basename(outfile),
+                    get_dns_version=lambda: DNS_HACK_ANCHOR + DNS_HACK_COMMENT)
         except Exception:
             tb = mako.exceptions.text_error_template().render().strip()
             logging.error("unhandled exception while rendering template '{}':\n{}"
