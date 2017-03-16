@@ -313,7 +313,7 @@ def apply_dns_version_hack(text, dnsfile):
     try:
         with open(dnsfile, "r") as f:
             old_text = f.read()
-    except (IOError, ValueError):
+    except (IOError, ValueError, TypeError):
         changed = True # consider that the file has changed
         old_version = 0 # fake last version of a file
     else:
