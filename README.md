@@ -171,11 +171,11 @@ is arbitrary and not guaranteed to be preserved.
 
 You can build conditional queries using a special symbol that is referenced
 by _host_ variable. For example:
-`db.search((host.vlan == 253) & (host.cluster != "montalcino")`
+`db.search((host.vlan == 253) & (host.cluster != "montalcino"))`
 will return a list of rows that have column "vlan" equal to 253 and column
 "cluster" not equal to "montalcino". You can construct any condition using
-| for "or", & for "and", == and !=, "not" and some other predicates. Just make
-sure to enclose your logical expressions into parenthesis.
+"|" for "or", "&" for "and", "~" for "not", "==", "!=" ">", ">=", "<" and "<=".
+Just make sure to enclose your logical expressions into parenthesis.
 
 There is also a way to query based on arbitrary boolean function. For example:
 `db.search(host.vlan.test(lambda v: bool(v % 2)))`
@@ -191,10 +191,10 @@ representations available for different config files. A summary is given below.
 * view.hosts -- returns a string suitable for use in /etc/hosts file;
 * view.dns -- returns a string suitable for use in DNS zone files. There is a
   second positional argument named "type" that could be either "addr" (default)
-  or "cname". In the first case, function returns hostname-to-ip matching; in
-  latter case, it returns hostname-to-resides-on matching;
+  or "cname". In the first case, function returns hostname-to-ip mapping. In
+  latter case, it returns hostname-to-resides-on mapping;
 * view.rdns -- returns a string suitable for use in DNS zone files containing
-  reverse DNS zone entries. It matches IP address to hostname and domain;
+  reverse DNS zone entries. It maps IP address to hostname and domain;
 * view.dhcp -- returns a string suitable for use in DHCP config files. It has
   three optional parameters:
     * with_hostname -- bool, whether add option "host-name" or not;
