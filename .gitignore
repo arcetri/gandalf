@@ -1,4 +1,5 @@
 # Files with test configuration
+templates
 templates/*
 rendered/*
 examples/rendered/*
