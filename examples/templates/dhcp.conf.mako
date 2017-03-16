@@ -8,10 +8,6 @@
 %>#
 # Example DHCP entries are defined below.
 #
-## Note that in this file comments are made using ';' symbol because
-## this is DHCP file syntax. However, template-level comments are still
-## to be done in '##' style.
-##
 ## Below we will do some more querying compared to /etc/hosts file.
 ## Every query will merely select one entry from CSV file but in somewhat
 ## sophisticated way.
